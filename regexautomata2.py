@@ -10,6 +10,7 @@ Regex šajā gadījumā:
 
 from importlib.resources import path
 from queue import Queue
+from turtle import st
 from automata.fa.nfa import NFA
 from visual_automata.fa.nfa import VisualNFA
 
@@ -19,6 +20,69 @@ GRAPHVIZ_PATH = 'C:/Program Files'
 import os
 os.environ["PATH"] += os.pathsep + GRAPHVIZ_PATH + '/Graphviz/bin'
 
+def checkForErrors(regex : str):
+    '''
+    Pārbauda vai regex sintakse ir pareiza:
+    1) Visas iekavas ir aizvērtas
+    2)| un * seko pēc alfabēta burta, % vai )
+    3) Regex nav tukša virkne (bez atstarpēm)
+    4) Iekavas nav tukšas
+    5)| seko alfabēta burts, % vai ( 
+
+    Ja kļūdu nav atgriež None, ja ir str, kas paskaidro pirmo atrasto kļūdu un tās indeksu
+    '''
+
+    if regex == "":
+        return "Tukšs regex nav atļauts. Ja gribat akceptēt tukšumu, rakstiet '%'"
+
+    stack = []
+    
+    lastalpha = False
+
+    conjLast = False
+    conjInd = -1
+
+    lastOpenParenthesis = False
+
+    for i, c in enumerate(regex):
+        if c == ' ':
+            continue
+        elif c == '(':
+            lastOpenParenthesis = True
+            lastalpha = False 
+            stack.append(i)
+            conjLast = False
+        elif c == ')':
+            if lastOpenParenthesis:
+                return f"Tukšas iekavas {i} pozīcijā"
+            lastalpha == True
+            if len(stack) == 0:
+                return f"Iekava ) {i} pozīcijā neko neaizver"
+            stack.pop()
+            lastOpenParenthesis = False
+        elif c == '|':
+            conjLast = True
+            conjInd = i
+            if not lastalpha:
+                return f"| pozīcijā {i} ir neatļauts"
+            lastalpha = False 
+            lastOpenParenthesis = False
+        elif c == '*':
+            if not lastalpha:
+                return f"* pozīcijā {i} ir neatļauts"
+            lastalpha = False 
+            lastOpenParenthesis = False
+        else:
+            lastalpha = True
+            lastOpenParenthesis = False
+            conjLast = False
+   
+
+    if len(stack) > 0:
+        return f"Iekava {stack[0]} pozīcijā nav aizvērta"           
+    elif conjLast:
+        return f"Nepabeigta konjukcija {conjInd} pozīcijā"
+    return None        
 
 def addToAutomata(automata, name, input, to):
         '''
@@ -175,6 +239,9 @@ def compile(regex : str, visualPath=None, visualName = "Visual"):
     #kompilē NFA un pārvērš par DFA (pieņemot, ka neesošās ievades noved pie deadstate)
     #Pārveido stāvokļu nosaukumus par str, jo tas nepieciešams visual-automata bibliotēkai  
 
+    error = checkForErrors(regex)
+    if error != None:
+        raise Exception(error)
     NFA, accepting1, _, _ = compileNFA(regex) 
     ind = 1 #nākamā stāvokļa indekss
     DFA = {} #Automāta pārejas 
@@ -234,42 +301,46 @@ def compile(regex : str, visualPath=None, visualName = "Visual"):
 
     return DFA, accepting2
 
-def isAccepted(regex : dict, accepting : dict, text : str, start = '0'):
+def isAccepted(regex : tuple, text : str, start = '0'):
     '''
-    Nosaka vai regex pāreju tabula un accepting stāvokļi, akceptēs text
+    Nosaka vai regex pāreju tabula un akceptējošie stāvokļi, akceptēs text
     Start ir sākuma stāvoklis automātam
     Atgriež True vai False
     '''
+    table = regex[0]
+    accepting = regex[1]
     state = start
     for c in text:
-        if not state in regex:
+        if not state in table:
            return False
-        inputs = regex[state]
+        inputs = table[state]
         if not c in inputs:
             return False
         state = next(iter(inputs[c])) #Tā kā tiek pilietots DFA pieņemam ka pirmais kopas elements ir vienīgais
     return state in accepting
 
-# regex= '(A | (BA) | C)*'
+#Pielietojuma piemēri
+
+regex = '(A | (BA) | C)*'
+r = compile(regex, visualPath="C:\Temp")
+print(r)
+print(isAccepted(r, ""))
+print(isAccepted(r, "A"))
+print(isAccepted(r, "B"))
+print(isAccepted(r, "BA"))
+print(isAccepted(r, "CBA"))
+print(isAccepted(r, "CC"))
+print(isAccepted(r, "D"))
+# regex= '(AA(A|B)*AA)|(BB(A|B)*BB)|(AB(A|B)*AB)|(BA(A|B)*BA)|A|B|(AA)|(AAA)|(BBB)|(BB)'
 # r, a = compile(regex, visualPath="C:\Temp")
 
-# print(isAccepted(r, a, ""))
+# print(isAccepted(r, a, "AA"))
 # print(isAccepted(r, a, "A"))
 # print(isAccepted(r, a, "B"))
-# print(isAccepted(r, a, "BA"))
-# print(isAccepted(r, a, "CBA"))
-# print(isAccepted(r, a, "CC"))
-# print(isAccepted(r, a, "D"))
-regex= '(AA(A|B)*AA)|(BB(A|B)*BB)|(AB(A|B)*AB)|(BA(A|B)*BA)|A|B|(AA)|(AAA)|(BBB)|(BB)'
-r, a = compile(regex, visualPath="C:\Temp")
-
-print(isAccepted(r, a, "AA"))
-print(isAccepted(r, a, "A"))
-print(isAccepted(r, a, "B"))
-print(isAccepted(r, a, "ABBBAB"))
-print(isAccepted(r, a, "BBAAAA"))
-print(isAccepted(r, a, "ABA"))
-print(isAccepted(r, a, ""))
+# print(isAccepted(r, a, "ABBBAB"))
+# print(isAccepted(r, a, "BBAAAA"))
+# print(isAccepted(r, a, "ABA"))
+# print(isAccepted(r, a, ""))
 # r, a = compile('(0|1)0*%|1')
 # print(r)
 # print(a)
